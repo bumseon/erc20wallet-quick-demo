@@ -6,7 +6,8 @@
 ## To-do 
 ### feasibility 
  * [ ]  Test with Smart-contract.
- ### Detach the wallet module from the entire project.
+ * [ ]  Research to safty keep method to sotres RSA keys. 
+### Detach the wallet module from the entire project.
  * [ ]  Construnct class architecture.
  * [ ]  Make wallet's interfaces.
  * [ ]  Implements wallet contents.
