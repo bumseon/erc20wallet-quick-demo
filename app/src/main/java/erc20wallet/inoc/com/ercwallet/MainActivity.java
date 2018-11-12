@@ -6,7 +6,6 @@ import android.content.res.AssetManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
-import android.os.SystemClock;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.design.widget.FloatingActionButton;
@@ -23,6 +22,8 @@ import android.widget.ArrayAdapter;
 import android.widget.ListView;
 import android.widget.TextView;
 
+import com.tokens.Precium;
+
 import org.web3j.crypto.CipherException;
 import org.web3j.crypto.Credentials;
 import org.web3j.crypto.WalletUtils;
@@ -32,6 +33,7 @@ import org.web3j.protocol.core.DefaultBlockParameterName;
 import org.web3j.protocol.core.methods.response.EthGetBalance;
 import org.web3j.protocol.core.methods.response.TransactionReceipt;
 import org.web3j.protocol.http.HttpService;
+import org.web3j.tx.Contract;
 import org.web3j.tx.Transfer;
 import org.web3j.utils.Convert;
 
@@ -53,6 +55,7 @@ import static android.Manifest.permission.INTERNET;
 import static android.content.pm.PackageManager.PERMISSION_DENIED;
 import static android.content.pm.PackageManager.PERMISSION_GRANTED;
 import static android.os.Environment.DIRECTORY_DOWNLOADS;
+import static android.support.design.widget.Snackbar.LENGTH_SHORT;
 import static erc20wallet.inoc.com.ercwallet.assist.Adv.e;
 import static erc20wallet.inoc.com.ercwallet.assist.Adv.i;
 import static erc20wallet.inoc.com.ercwallet.assist.Adv.v;
@@ -83,6 +86,15 @@ public class MainActivity extends AppCompatActivity {
     private void test(){
 
     }
+
+    enum RIGHTS {user , owner}
+
+
+    Credentials _owner_cred ;
+
+    private final String precium_contract_addr = "0x9387A03BbB50e0AF52DFd56Aa977f8Ab3E346135";
+    boolean bUseContract  = false;
+
 
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
@@ -162,18 +174,37 @@ public class MainActivity extends AppCompatActivity {
                     if( idx == mSelectedCredential ){
                         continue;
                     }
-                    Credentials _cred = mCredentials.get(idx);
+                    final Credentials _cred = mCredentials.get(idx);
                     mCredentials_recv.add(_cred);
                     items_recv.add(_cred.getAddress());
                 }
-                
+                final boolean bDoneNetwork =false;
+                new Thread(new Runnable() {
+                    @Override
+                    public void run() {
+                        String finalBalance = "";
+                        if( bUseContract){
+                            final Credentials _cred = mCredentials.get(mSelectedCredential);
+                            Precium precium = Precium.load(precium_contract_addr,
+                                    web3j , _cred ,BigInteger.valueOf(100) , BigInteger.valueOf(100) );
+                            try {
+                                BigInteger _balance = precium.balanceOf(_cred.getAddress()).send();
+                                finalBalance= _balance.toString();
+                                v(String.format("[SEND] addr :%s \ncontract balance: %s" , _cred.getAddress() ,finalBalance));
+                            } catch (Exception e) {
+                                e.printStackTrace();
+                            }finally {
+
+                            }
+                        }
+                    }
+                }).start();
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
                         adapter_recv.notifyDataSetChanged();
                         ((TextView)findViewById(R.id.tv_adress)).setText(address);
                         ((TextView)findViewById(R.id.tv_balance)).setText(balance);
-                        
                     }
                 });
             }else if ( adapterView.getId() == R.id.lv_wallets_recv){
@@ -181,6 +212,28 @@ public class MainActivity extends AppCompatActivity {
                 final String address = mCredentials_recv.get(i).getAddress();
                 final String balance = getAccountBalance(mCredentials_recv.get(i));
                 v(address);
+                Credentials _cred = mCredentials_recv.get(mSelectedCredential_recv);
+
+                new Thread(new Runnable() {
+                    @Override
+                    public void run() {
+                        String finalBalance = "";
+                        if( bUseContract){
+                            Credentials _cred = mCredentials_recv.get(mSelectedCredential_recv);
+                            Precium precium = Precium.load(precium_contract_addr,
+                                    web3j , _cred ,BigInteger.valueOf(100) , BigInteger.valueOf(100) );
+                            try {
+                                BigInteger _balance = precium.balanceOf(_cred.getAddress()).send();
+                                finalBalance= _balance.toString();
+                                v(String.format("[RECV] addr :%s \ncontract balance: %s" , _cred.getAddress() ,finalBalance));
+                            } catch (Exception e) {
+                                e.printStackTrace();
+                            }finally {
+
+                            }
+                        }
+                    }
+                }).start();
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
@@ -203,10 +256,9 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public String getAccountBalance(Credentials _cred ){
-
         try {
             if( web3j == null){
-                Snackbar.make(mView, "Connect testnet first." , Snackbar.LENGTH_SHORT).show();
+                Snackbar.make(mView, "Connect testnet first." , LENGTH_SHORT).show();
                 return "Connect testnet first.";
             }
             EthGetBalance _balance = web3j.ethGetBalance(_cred.getAddress() , DefaultBlockParameterName.LATEST)
@@ -222,7 +274,7 @@ public class MainActivity extends AppCompatActivity {
 
     public boolean transaction(){
 
-        Snackbar.make(mView, "Start transaction.. Please wait..", Snackbar.LENGTH_SHORT).show();
+        Snackbar.make(mView, "Start transaction.. Please wait..", LENGTH_SHORT).show();
         appendHistory("Start transaction. Please wait...");
         new Thread(new Runnable() {
             @Override
@@ -277,12 +329,37 @@ public class MainActivity extends AppCompatActivity {
                     appendHistory("Connected client : "+_testnetURL );
                     appendHistory("client version : " + web3j.web3ClientVersion().send().getWeb3ClientVersion());
 
+                    ///*
+                    Precium _contract = Precium.load(precium_contract_addr,
+                            web3j , mCredentials.get(0), BigInteger.valueOf(100),BigInteger.valueOf(100));
+                    BigInteger _totalBalance = _contract.balanceOf(_owner_cred.getAddress()).send();
+                    appendHistory(String.format("owner's balance : %s" ,
+                            _totalBalance.toString()));
+                    //*/
+
                 } catch (IOException e) {
+                    e.printStackTrace();
+                } catch (Exception e) {
                     e.printStackTrace();
                 }
             }
         }).start();
         return true;
+    }
+
+    public Credentials loadCredential(String APath ,RIGHTS _rights){
+        String _passwd = DEFAULT_PASSWD;
+        if( _rights == RIGHTS.owner){
+            _passwd ="testadd!1";
+        }
+        try {
+            return WalletUtils.loadCredentials(_passwd , APath);
+        } catch (IOException e) {
+            e.printStackTrace();
+        } catch (CipherException e) {
+            e.printStackTrace();
+        }
+        return null;
     }
 
     public boolean updateWalletList(){
@@ -318,16 +395,19 @@ public class MainActivity extends AppCompatActivity {
                 mCredentials.clear();
             }
             for( int i=0 ; i< _files.length; i++){
-                try {
-                    i("wallet["+i+"] : " + _files[i].getAbsolutePath());
-                    Credentials _cred = WalletUtils.loadCredentials(DEFAULT_PASSWD , _files[i].getAbsolutePath());
+                i("wallet["+i+"] : " + _files[i].getAbsolutePath());
+
+                RIGHTS _rights  = _files[i].getAbsolutePath().contains("owner") ? RIGHTS.owner : RIGHTS.user;
+                Credentials _cred = loadCredential( _files[i].getAbsolutePath() , _rights);
+                if( _rights == RIGHTS.owner ){
+                    _owner_cred = _cred;
+                    i("Owner account: "+ _cred.getAddress());
+                }else{
                     mCredentials.add(_cred);
                     items.add(/*f.getName() + "\n" + */_cred.getAddress());
-                    i("Account : "+ _cred.getAddress());
-                } catch (IOException | CipherException e) {
-                    e.printStackTrace();
-                    e(e.getMessage());
+                    i("User account: "+ _cred.getAddress());
                 }
+
             }
             runOnUiThread(new Runnable() {
                 @Override
@@ -344,18 +424,20 @@ public class MainActivity extends AppCompatActivity {
         v("input passwd : " + passwd);
         View _v = findViewById(R.id.btn_test);
         if( DEFAULT_DIR != null){
+
+            String fName = null;
             try {
-                String fName = WalletUtils.generateLightNewWalletFile(passwd , DEFAULT_DIR);
-                i("create file name : " + fName);
-                Credentials _cred = WalletUtils.loadCredentials(passwd , DEFAULT_DIR + "/" + fName);
-                String _addr =_cred.getAddress();
-                i("wallet addres :" + _addr);
-                Snackbar.make(_v ,"new Wallet created - \n" + _addr , Snackbar.LENGTH_SHORT ).show();
-                appendHistory("new Wallet created - \n" + _addr);
+                fName = WalletUtils.generateLightNewWalletFile(passwd , DEFAULT_DIR);
             } catch (NoSuchAlgorithmException |NoSuchProviderException |InvalidAlgorithmParameterException |CipherException |IOException e) {
                 e.printStackTrace();
-                e(e.getMessage());
             }
+            i("create file name : " + fName);
+            Credentials _cred = loadCredential(DEFAULT_DIR + "/" + fName , RIGHTS.user);
+            //Credentials _cred = WalletUtils.loadCredentials(passwd , DEFAULT_DIR + "/" + fName);
+            String _addr =_cred.getAddress();
+            i("wallet addres :" + _addr);
+            Snackbar.make(_v ,"new Wallet created - \n" + _addr , LENGTH_SHORT ).show();
+            appendHistory("new Wallet created - \n" + _addr);
         }
         updateWalletList();
         return true;
@@ -372,7 +454,8 @@ public class MainActivity extends AppCompatActivity {
         String[] assetList = {
                 "UTC--2018-09-23T18-58-46.739--e399d4d877bbedaa5f1a9e2f4fe8106c45972976.json",
                 "UTC--2018-09-23T19-35-03.873--1b44c0d3bb828f574ca36fddaf939b1d5f00507a.json",
-                "UTC--2018-09-23T20-57-20.744--444d59442d6dad320926cdad738e28a805ce0585.json"
+                "UTC--2018-09-23T20-57-20.744--444d59442d6dad320926cdad738e28a805ce0585.json",
+                "owner-UTC--2018-11-11T06-37-19.084Z--71f108f15b72f3a6f0a5c32cfc330e165a4ed50e.json"
         };
         AssetManager manager = getResources().getAssets();
 
@@ -404,7 +487,7 @@ public class MainActivity extends AppCompatActivity {
         ((ListView)findViewById(R.id.lv_wallets)).setAdapter(adapter);
 
         items_recv = new ArrayList<String>();
-        adapter_recv  =new ArrayAdapter(this, android.R.layout.simple_list_item_single_choice ,items_recv);
+        adapter_recv  =new ArrayAdapter(this, android.R.layout.simple_list_item_single_choice , items_recv);
         ((ListView)findViewById(R.id.lv_wallets_recv)).setAdapter(adapter_recv);
         items_recv.add("Please select SENDER first.");
 
@@ -447,7 +530,6 @@ public class MainActivity extends AppCompatActivity {
         }else{
             mPermission_granded = true;
         }
-
     }
 
 
@@ -481,6 +563,36 @@ public class MainActivity extends AppCompatActivity {
         //noinspection SimplifiableIfStatement
         if (id == R.id.action_settings) {
             return true;
+        }else if( id == R.id.action_use_token){
+            bUseContract = !bUseContract;
+            Snackbar.make(this.mView , String.format("Contract 사용 여부(%s)" , bUseContract ) , LENGTH_SHORT).show();
+        }else if( id == R.id.action_transferfrom_owner){
+            if( web3j == null  ){
+                Snackbar.make(this.mView , "Initialize first.", LENGTH_SHORT).show();
+                return false;
+            }
+
+            new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    Precium _contract = Precium.load(precium_contract_addr, web3j ,_owner_cred, Contract.GAS_PRICE , Contract.GAS_LIMIT );
+                    try {
+                        _contract.transfer(mCredentials_recv.get(mSelectedCredential_recv).getAddress() ,
+                                BigInteger.valueOf(2222)).send();
+
+                        v("(addr :::" + mCredentials_recv.get(mSelectedCredential_recv).getAddress().toString());
+
+                        //_contract.transferAndLock(mCredentials_recv.get(mSelectedCredential_recv).getAddress() ,BigInteger.valueOf(2222),BigInteger.valueOf(1) ).send();
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+            }).start();
+
+
+            /*_contract.transferAndLock(mCredentials_recv.get(mSelectedCredential_recv).getAddress() ,
+                    BigInteger.valueOf(2222),
+                    BigInteger.valueOf(1) );*/
         }
 
         return super.onOptionsItemSelected(item);

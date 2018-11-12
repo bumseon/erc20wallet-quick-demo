@@ -7,4 +7,29 @@
         android:orderInCategory="100"
         android:title="@string/action_settings"
         app:showAsAction="never" />
-</menu>
+    <item
+        android:id="@+id/action_use_token"
+        android:orderInCategory="100"
+        android:title="use_token"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_transferfrom_owner"
+        android:orderInCategory="100"
+        android:title="transfer from owner"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_transferfrom_owner_lock"
+        android:orderInCategory="100"
+        android:title="transfer from owner(lock)"
+        app:showAsAction="never" />
+
+    <!--<item
+        android:id="@+id/action_settings"
+        android:orderInCategory="100"
+        android:title="@string/action_settings"
+        app:showAsAction="never" />
+-->
+
+    </menu>
